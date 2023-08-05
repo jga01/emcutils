@@ -46,5 +46,9 @@ const fetchNationMayors = async (nation) => {
 }
 
 module.exports = {
+    fetchNationData,
+    fetchTownData,
+    fetchResidentData,
+    fetchNationTowns,
     fetchNationMayors,
 };

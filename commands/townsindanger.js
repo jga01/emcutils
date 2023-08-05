@@ -1,68 +1,64 @@
-const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ComponentType } = require ('discord.js');
-const { getInactiveMayors } = require('../utils/getInactiveMayors');
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ComponentType } = require('discord.js');
+const { fetchNationMayors } = require('../utils/fetch');
+const { sortMayors } = require('../utils/sortMayors');
+const { formatMayors } = require('../utils/formatMayors');
+const constants = require('../constants');
 
 module.exports = {
 	data: new SlashCommandBuilder()
 		.setName('townsindanger')
 		.setDescription('Towns approaching deletion'),
 	async execute(interaction) {
-		const row = (isBackDisabled, isForwardDisabled) => new ActionRowBuilder()
+		const row = () => new ActionRowBuilder()
 			.addComponents(
 				new ButtonBuilder()
-					.setCustomId('back_button')
-					.setEmoji('⬅️')
-					.setStyle(ButtonStyle.Primary)
-					.setDisabled(isBackDisabled),
+					.setCustomId('ascending')
+					.setEmoji('⬆️')
+					.setStyle(ButtonStyle.Primary),
 				new ButtonBuilder()
-					.setCustomId('forward_button')
-					.setEmoji('➡️')
-					.setStyle(ButtonStyle.Primary)
-					.setDisabled(isForwardDisabled),
+					.setCustomId('descending')
+					.setEmoji('⬇️')
+					.setStyle(ButtonStyle.Primary),
 			);
 
-		function customEmbedBuilder(title, description, footerText) {
+		function customEmbedBuilder(title, content, description, footerText) {
 			const embed = new EmbedBuilder()
 				.setColor(0x0099FF)
 				.setTitle(title)
 				.setDescription(description)
-				.setFooter({ text: `${footerText}` });
+				.setFooter({ text: `${footerText}`, iconURL: constants.ICON_URL });
+
+				for (c of content) {
+					embed.addFields({ name: '\u200B', value: c });
+				}
 			return embed;
 		}
 
-		const inactiveMayors = await getInactiveMayors('Brazil');
+		const mayors = await fetchNationMayors('Brazil');
+		let formattedMayors = Array.from(formatMayors(mayors));
 
-		console.log(inactiveMayors);
+		formattedMayors.splice(0, 50);
 
-		const townNames = inactiveMayors.map((mayor) => mayor.town);
+		console.log(formattedMayors);
 
-		console.log(townNames);
+		const content = formattedMayors;
 
-		const arrays = [], size = 10;
-
-		let currentPage = 0;
-		
-		while (townNames.length > 0) arrays.push('```arm\n' + townNames.splice(0, size).join('\n') + '```\n');
-
-		console.log(arrays);
-
-		const message = await interaction.reply({ embeds: [customEmbedBuilder('Towns that will get deleted in 72hrs', arrays[0], `Page ${currentPage}/${arrays.length - 1}`)], components: [row(true, false)], fetchReply: true });
+		const message = await interaction.reply({ embeds: [customEmbedBuilder('Last Online', content, 'Test', constants.BOT_NAME)], components: [row()], fetchReply: true });
 
 		const collector = message.createMessageComponentCollector({ ComponentType: ComponentType.Button, time: 5 * 60 * 1000 });
 
 		collector.on('collect', async i => {
-			if (i.customId === 'back_button') {
-				currentPage--;
-				await i.update({ embeds: [customEmbedBuilder('Towns in danger', arrays[currentPage], `Page ${currentPage}/${arrays.length - 1}`)], components: [row((currentPage == 0 ? true : false), false)] });
+			if (i.customId === 'ascending') {
+				await i.update({ embeds: [customEmbedBuilder('Last Online', content, 'Test', constants.BOT_NAME)], components: [row()] });
 			}
-			else if (i.customId === 'forward_button') {
-				currentPage++;
-				await i.update({ embeds: [customEmbedBuilder('Towns in danger', arrays[currentPage], `Page ${currentPage}/${arrays.length - 1}`)], components: [row(false, (currentPage == (arrays.length - 1) ? true : false))] });
+			else if (i.customId === 'descending') {
+				await i.update({ embeds: [customEmbedBuilder('Last Online', content, 'Test', constants.BOT_NAME)], components: [row()] });
 			}
 		});
 
 		collector.on('end', collected => {
 			console.log(`Collected ${collected.size} items`);
-			interaction.editReply({ embeds: [customEmbedBuilder('Towns in danger', arrays[currentPage], `Page ${currentPage}/${arrays.length}`)], components: [] });
+			interaction.editReply({ embeds: [customEmbedBuilder('Last Online', content, 'Test', constants.BOT_NAME)], components: [] });
 		});
 	},
 };
