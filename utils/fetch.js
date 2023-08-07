@@ -2,7 +2,25 @@ const fetch = require('cross-fetch')
 
 const nationEndpoint = "https://api.earthmc.net/v2/aurora/nations";
 const townEndpoint = "https://api.earthmc.net/v2/aurora/towns";
+const townListsEndpoint = "https://api.earthmc.net/v2/aurora/lists/towns";
 const residentsEndpoint = "https://api.earthmc.net/v2/aurora/residents";
+
+const fetchAllTownNames = async () => {
+    const response = await fetch(townListsEndpoint);
+    const data = await response.json();
+    return data;
+}
+
+const fetchAllTowns = async() => {
+    const allTownNames = await fetchAllTownNames();
+
+    const allTownPromises = allTownNames.map((town) =>
+        fetchTownData(town)
+    );
+
+    const allTownsData = Promise.all(allTownPromises);
+    return allTownsData;
+}
 
 const fetchNationData = async (nation) => {
 	const response = await fetch(`${nationEndpoint}/${nation}`);
