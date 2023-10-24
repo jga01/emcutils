@@ -1,7 +1,8 @@
-const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ComponentType, codeBlock } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType, codeBlock } = require('discord.js');
 const { fetchNationMayors } = require('../utils/fetch');
 const { sortMayors } = require('../utils/sortMayors');
 const { formatMayors } = require('../utils/formatMayors');
+const { customEmbedBuilder } = require('../structures/embed');
 const constants = require('../constants');
 
 const COMMAND_NAME = 'lastonlinemayors';
@@ -25,15 +26,6 @@ module.exports = {
 					.setEmoji('⬇️')
 					.setStyle(ButtonStyle.Primary),
 			);
-
-		function customEmbedBuilder(title, description, footerText) {
-			const embed = new EmbedBuilder()
-				.setColor(0x0099FF)
-				.setTitle(title)
-				.setDescription(description)
-				.setFooter({ text: `${footerText}`, iconURL: constants.ICON_URL });
-			return embed;
-		}
 
 		const mayors = await fetchNationMayors('Brazil');
 		const formattedMayors = formatMayors(mayors);
