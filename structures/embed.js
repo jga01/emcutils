@@ -1,11 +1,12 @@
 const { EmbedBuilder } = require('discord.js');
+const constants = require('../constants.js');
 
 function customEmbedBuilder(title, description, footerText) {
     const embed = new EmbedBuilder()
         .setColor(0x0099FF)
         .setTitle(title)
         .setDescription(description)
-        .setFooter({ text: `${footerText}`, iconURL: constants.ICON_URL });
+        .setFooter({ text: `${footerText}`, iconURL: constants.ICON_PATH });
     return embed;
 }
 

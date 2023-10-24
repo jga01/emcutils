@@ -11,7 +11,7 @@ const fetchAllTownNames = async () => {
     return data;
 }
 
-const fetchAllTowns = async() => {
+const fetchAllTowns = async () => {
     const allTownNames = await fetchAllTownNames();
 
     const allTownPromises = allTownNames.map((town) =>
@@ -23,15 +23,15 @@ const fetchAllTowns = async() => {
 }
 
 const fetchNationData = async (nation) => {
-	const response = await fetch(`${nationEndpoint}/${nation}`);
-	const data = await response.json();
-	return data;
+    const response = await fetch(`${nationEndpoint}/${nation}`);
+    const data = await response.json();
+    return data;
 }
 
 const fetchTownData = async (town) => {
-	const response = await fetch(`${townEndpoint}/${town}`);
-	const data = await response.json();
-	return data;
+    const response = await fetch(`${townEndpoint}/${town}`);
+    const data = await response.json();
+    return data;
 };
 
 const fetchResidentData = async (resident) => {
@@ -54,8 +54,8 @@ const fetchNationTowns = async (nation) => {
 
 const fetchNationMayors = async (nation) => {
     const towns = await fetchNationTowns(nation);
-    
-    const mayorPromises= towns.map((town) => 
+
+    const mayorPromises = towns.map((town) =>
         fetchResidentData(town.mayor)
     );
 

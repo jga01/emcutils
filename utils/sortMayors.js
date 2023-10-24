@@ -1,8 +1,8 @@
-const { convertUTCtoDays } = require('./convertUTCtoDays');
+const { daysSinceLastOnline } = require('./daysSinceLastOnline');
 
 const sortMayorFunction = (mayor_a, mayor_b, ascending) => {
-	let aLastOnline = convertUTCtoDays(mayor_a.timestamps.lastOnline);
-	let bLastOnline = convertUTCtoDays(mayor_b.timestamps.lastOnline);
+	let aLastOnline = daysSinceLastOnline(mayor_a.timestamps.lastOnline);
+	let bLastOnline = daysSinceLastOnline(mayor_b.timestamps.lastOnline);
 	return ascending ? aLastOnline - bLastOnline : bLastOnline - aLastOnline;
 }
 
