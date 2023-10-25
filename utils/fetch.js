@@ -1,74 +1,49 @@
-const fetch = require('cross-fetch')
+const constants = require('../constants');
 
-const nationEndpoint = "https://api.earthmc.net/v2/aurora/nations";
-const townEndpoint = "https://api.earthmc.net/v2/aurora/towns";
-const townListsEndpoint = "https://api.earthmc.net/v2/aurora/lists/towns";
-const residentsEndpoint = "https://api.earthmc.net/v2/aurora/residents";
-
-const fetchAllTownNames = async () => {
-    const response = await fetch(townListsEndpoint);
+async function fetchResident(resident) {
+    const response = await fetch(`${constants.RESIDENTS_ENDPOINT}/${resident}`);
     const data = await response.json();
     return data;
 }
 
-const fetchAllTowns = async () => {
-    const allTownNames = await fetchAllTownNames();
-
-    const allTownPromises = allTownNames.map((town) =>
-        fetchTownData(town)
-    );
-
-    const allTownsData = Promise.all(allTownPromises);
-    return allTownsData;
-}
-
-const fetchNationData = async (nation) => {
-    const response = await fetch(`${nationEndpoint}/${nation}`);
+async function fetchTown(town) {
+    const response = await fetch(`${constants.TOWNS_ENDPOINT}/${town}`);
     const data = await response.json();
     return data;
 }
 
-const fetchTownData = async (town) => {
-    const response = await fetch(`${townEndpoint}/${town}`);
-    const data = await response.json();
-    return data;
-};
-
-const fetchResidentData = async (resident) => {
-    const response = await fetch(`${residentsEndpoint}/${resident}`);
+async function fetchNation(nation) {
+    const response = await fetch(`${constants.NATIONS_ENDPOINT_ENDPOINT}/${nation}`);
     const data = await response.json();
     return data;
 }
 
-const fetchNationTowns = async (nation) => {
-    const nationData = await fetchNationData(nation);
-    const towns = nationData.towns;
+/* ----------------------- BULK FUNCTIONS ----------------------- */
 
-    const townPromises = towns.map((town) =>
-        fetchTownData(town)
-    );
-
-    const townsData = Promise.all(townPromises);
-    return townsData;
+async function fetchAllResidents() {
+    const response = await fetch(constants.RESIDENTS_ENDPOINT);
+    const data = await response.json();
+    return data;
 }
 
-const fetchNationMayors = async (nation) => {
-    const towns = await fetchNationTowns(nation);
+async function fetchAllTowns() {
+    const response = await fetch(constants.TOWNS_ENDPOINT);
+    const data = await response.json();
+    return data;
+}
 
-    const mayorPromises = towns.map((town) =>
-        fetchResidentData(town.mayor)
-    );
-
-    const mayorsData = Promise.all(mayorPromises);
-    return mayorsData;
+async function fetchAllNations() {
+    const response = await fetch(constants.NATIONS_ENDPOINT);
+    const data = await response.json();
+    return data;
 }
 
 module.exports = {
-    fetchAllTownNames,
+    fetchResident,
+    fetchTown,
+    fetchNation,
+
+    fetchAllResidents,
     fetchAllTowns,
-    fetchNationData,
-    fetchTownData,
-    fetchResidentData,
-    fetchNationTowns,
-    fetchNationMayors,
-};
+    fetchAllNations
+}
