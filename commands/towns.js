@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require('discord.js');
 const { customEmbedBuilder } = require('../structures/embed');
+const lodash = require('lodash');
 const constants = require('../constants');
 const fetch = require('../utils/fetch');
 
@@ -13,6 +14,12 @@ module.exports = {
 	data: new SlashCommandBuilder()
 		.setName(COMMAND_NAME)
 		.setDescription(COMMAND_DESCRIPTION)
+		.addStringOption((option) =>
+			option
+				.setName('nation')
+				.setDescription('Nation to filter the towns by.')
+				.setRequired(false)
+		)
 		.addIntegerOption((option) =>
 			option
 				.setName('lastonline')
@@ -37,22 +44,27 @@ module.exports = {
 				.setDescription('Whether the town is open or not')
 				.setRequired(false)
 		),
+
 	async execute(interaction) {
-		// Defer reply to indicate the bot is working
 		await interaction.deferReply({ ephemeral: false });
 
-		// Default option values
-		const lastOnline = interaction.options.getInteger('lastonline') || 0;
-		const minChunks = interaction.options.getInteger('minchunks') || 0;
-		const population = interaction.options.getInteger('population') || 1;
-		const isOpen = interaction.options.getBoolean('isopen') || true;
+		const options = {
+			nation: interaction.options.getString('nation') || null,
+			lastOnline: interaction.options.getInteger('lastonline') || 0,
+			minChunks: interaction.options.getInteger('minchunks') || 0,
+			population: interaction.options.getInteger('population') || 1,
+			isOpen: interaction.options.getBoolean('isopen') || true,
+		};
 
-		// Fetch town data
 		const towns = await fetch.fetchAllTowns();
 
 		const townsWithMayors = await Promise.all(towns.map(async (town) => {
+			const now = new Date().getTime();
 			try {
-				const mayor = await fetch.fetchResident(town.mayor);
+				let mayor = await fetch.fetchResident(town.mayor);
+				const lastOnlineTime = mayor.timestamps?.lastOnline || 0;
+				const daysSinceLastOnline = Math.floor((now - lastOnlineTime) / constants.MILLISECONDS_IN_A_DAY);
+				mayor.daysOffline = daysSinceLastOnline;
 				town.mayor = mayor;
 				return town;
 			} catch (error) {
@@ -65,56 +77,96 @@ module.exports = {
 			}
 		}));
 
-		// Filter towns based on options
-		const filteredTowns = filterTowns(townsWithMayors, lastOnline, minChunks, population, isOpen);
+		const filteredTowns = filterTowns(townsWithMayors, options);
 
-		const formattedTowns = filteredTowns.map((town) => formatTownAsTableRow(town, { lastOnline, minChunks, population, isOpen }));
+		const formattedTowns = filteredTowns.map((town) => formatTownAsTableRow(town, options));
 
-		// Paginate the filtered towns
 		let currentPage = 0;
 		const totalPages = Math.ceil(formattedTowns.length / PAGE_SIZE);
-		let paginatedTowns = paginateTowns(formattedTowns, totalPages, PAGE_SIZE);
+		const paginatedTowns = paginateTowns(formattedTowns, totalPages, PAGE_SIZE);
 
-		// Send the initial page
+		let daysOfflineAscending = 0;
+		let chunksAscending = 0;
+		let residentsAscending = 0;
+
 		const message = await sendPage(interaction, paginatedTowns[currentPage], currentPage, totalPages);
 
-		// Create a collector to handle button clicks
 		const collector = message.createMessageComponentCollector({ componentType: ComponentType.Button, time: 5 * 60 * 1000 });
 
-		collector.on('collect', async i => {
-			if (i.customId === 'next_page' && currentPage < totalPages - 1) {
-				currentPage++;
-			} else if (i.customId === 'prev_page' && currentPage > 0) {
-				currentPage--;
-			}
+		let sortedTowns = filteredTowns;
 
-			// Update the displayed page
-			await updatePage(i, paginatedTowns[currentPage], currentPage, totalPages);
+		collector.on('collect', async i => {
+			let formattedSorted;
+			const actions = {
+				'next_page': async () => {
+					if (currentPage < totalPages - 1) {
+						currentPage++;
+						formattedSorted = sortedTowns.map((town) => formatTownAsTableRow(town, options));
+						formattedSorted = paginateTowns(formattedSorted, totalPages, PAGE_SIZE);
+						await updatePage(i, formattedSorted[currentPage], currentPage, totalPages);
+					}
+				},
+				'prev_page': async () => {
+					if (currentPage > 0) {
+						currentPage--;
+						formattedSorted = sortedTowns.map((town) => formatTownAsTableRow(town, options));
+						formattedSorted = paginateTowns(formattedSorted, totalPages, PAGE_SIZE);
+						await updatePage(i, formattedSorted[currentPage], currentPage, totalPages);
+					}
+				},
+				'days_offline': async () => {
+					daysOfflineAscending = !daysOfflineAscending;
+					sortedTowns = sortTowns(sortedTowns, 'mayor.daysOffline', daysOfflineAscending);
+					formattedSorted = sortedTowns.map((town) => formatTownAsTableRow(town, options));
+					formattedSorted = paginateTowns(formattedSorted, totalPages, PAGE_SIZE);
+					await updatePage(i, formattedSorted[currentPage], currentPage, totalPages);
+				},
+				'chunks': async () => {
+					chunksAscending = !chunksAscending;
+					sortedTowns = sortTowns(sortedTowns, 'stats.numTownBlocks', chunksAscending);
+					formattedSorted = sortedTowns.map((town) => formatTownAsTableRow(town, options));
+					formattedSorted = paginateTowns(formattedSorted, totalPages, PAGE_SIZE);
+					await updatePage(i, formattedSorted[currentPage], currentPage, totalPages);
+				},
+				'residents': async () => {
+					residentsAscending = !residentsAscending;
+					sortedTowns = sortTowns(sortedTowns, 'stats.numResidents', chunksAscending);
+					formattedSorted = sortedTowns.map((town) => formatTownAsTableRow(town, options));
+					formattedSorted = paginateTowns(formattedSorted, totalPages, PAGE_SIZE);
+					await updatePage(i, formattedSorted[currentPage], currentPage, totalPages);
+				}
+			};
+
+			if (actions[i.customId]) {
+				actions[i.customId]();
+			}
 		});
 
 		collector.on('end', (collected) => {
 			console.log(`Collected ${collected.size} items`);
-			collected.editReply({ components: [] });
+			interaction.editReply({ components: [] });
 		});
 	},
 };
 
-// Function to filter towns based on options
-function filterTowns(towns, lastOnline, minChunks, population, isOpen) {
-	const now = new Date().getTime();
+function filterTowns(towns, options) {
 	return towns.filter((town) => {
-		const lastOnlineTime = town.mayor?.timestamps?.lastOnline || 0;
-		const daysSinceLastOnline = Math.floor((now - lastOnlineTime) / constants.MILLISECONDS_IN_A_DAY);
 		return (
-			daysSinceLastOnline >= lastOnline &&
-			town.status.isOpen === isOpen &&
-			town.stats.numTownBlocks >= minChunks &&
-			town.stats.numResidents <= population
+			(options.nation === null || town.nation === options.nation) &&
+			town.mayor.daysOffline >= options.lastOnline &&
+			town.status.isOpen === options.isOpen &&
+			town.stats.numTownBlocks >= options.minChunks &&
+			town.stats.numResidents <= options.population
 		);
 	});
 }
 
-// Function to paginate a list of towns
+function sortTowns(towns, property, ascending) {
+	return towns.sort((a, b) => {
+		return ascending ? lodash.get(a, property) - lodash.get(b, property) : lodash.get(b, property) - lodash.get(a, property);
+	});
+}
+
 function paginateTowns(towns, totalPages, pageSize) {
 	const pages = [];
 	for (let i = 0; i < totalPages; i++) {
@@ -126,7 +178,7 @@ function paginateTowns(towns, totalPages, pageSize) {
 function setupPage(towns, currentPage, totalPages) {
 	const tableHeaders = 'Town Name       | Days Offline | Chunks  | Residents | Status\n';
 	const tableRows = towns;
-	const content = '```' + tableHeaders + tableRows + '```'; // Wrap the table in a code block for monospaced formatting
+	const content = '```' + tableHeaders + tableRows + '```';
 	const components = createComponents(currentPage, totalPages);
 
 	return { embeds: [customEmbedBuilder(EMBED_TITLE, content, `Page: ${currentPage + 1}/${totalPages}`, constants.BOT_NAME)], components };
@@ -142,19 +194,16 @@ async function updatePage(interaction, towns, currentPage, totalPages) {
 	return await interaction.update(obj);
 }
 
-
-// Function to format a town as a table row
 function formatTownAsTableRow(town, options) {
 	const name = town.name.padEnd(25);
-	const daysOffline = options.lastOnline < 10 ? `0${options.lastOnline}` : options.lastOnline;
-	const chunks = town.stats.numTownBlocks < 100 ? ' ' : '';
-	const residents = town.stats.numResidents < 100 ? ' ' : '';
+	const daysOffline = ("00" + options.lastOnline).slice(-3);
+	const chunks = ("00" + town.stats.numTownBlocks).slice(-3);
+	const residents = ("00" + town.stats.numResidents).slice(-3);
 	const status = town.status.isOpen ? 'Open' : 'Closed';
 
-	return `${name} ${daysOffline}\t\t${chunks}${town.stats.numTownBlocks}     ${residents}${town.stats.numResidents}     ${status}`;
+	return `${name}${daysOffline}\t\t${chunks}\t\t${residents}\t${status}`;
 }
 
-// Function to create navigation buttons
 function createComponents(currentPage, totalPages) {
 	return [
 		new ActionRowBuilder()
@@ -168,7 +217,22 @@ function createComponents(currentPage, totalPages) {
 					.setCustomId('next_page')
 					.setEmoji('➡️')
 					.setDisabled(currentPage === totalPages - 1)
-					.setStyle(ButtonStyle.Primary)
+					.setStyle(ButtonStyle.Primary),
+				new ButtonBuilder()
+					.setCustomId('days_offline')
+					.setEmoji('⏳')
+					.setDisabled(!totalPages)
+					.setStyle(ButtonStyle.Secondary),
+				new ButtonBuilder()
+					.setCustomId('chunks')
+					.setEmoji('🌐')
+					.setDisabled(!totalPages)
+					.setStyle(ButtonStyle.Secondary),
+				new ButtonBuilder()
+					.setCustomId('residents')
+					.setEmoji('👤')
+					.setDisabled(!totalPages)
+					.setStyle(ButtonStyle.Secondary),
 			),
 	];
 }
